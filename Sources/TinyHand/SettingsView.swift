@@ -983,6 +983,10 @@ private struct DrawingPage: View {
                 .fixedSize()
                 .focusable(false)
             }
+            Row("Snap shapes", detail: "Rough lines, arrows, circles, boxes, triangles, stars and hearts turn into clean shapes.") {
+                Toggle("", isOn: model.binding({ Preferences.snapShapes }, { Preferences.snapShapes = $0 }))
+                    .toggleStyle(.switch).labelsHidden().focusable(false)
+            }
             Row("Ink button in the toolbar", detail: "Change the colour while you present.") {
                 Toggle("", isOn: model.binding({ Preferences.showInkButton }, { Preferences.showInkButton = $0 }))
                     .toggleStyle(.switch).labelsHidden().focusable(false)

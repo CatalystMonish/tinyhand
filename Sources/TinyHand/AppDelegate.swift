@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var toggleItem: NSMenuItem?
     private var clearItem: NSMenuItem?
     private var soundItem: NSMenuItem?
+    private var snapItem: NSMenuItem?
     private var toggleHotKey: UInt32?
     private var clearHotKey: UInt32?
 
@@ -67,12 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let toggle = NSMenuItem(title: "", action: #selector(toggle), keyEquivalent: "")
         let clear = NSMenuItem(title: "", action: #selector(clearInk), keyEquivalent: "")
         let sound = NSMenuItem(title: "Tap Sound", action: #selector(toggleSound), keyEquivalent: "")
+        let snap = NSMenuItem(title: "Snap Shapes", action: #selector(toggleSnap), keyEquivalent: "")
         toggleItem = toggle
         clearItem = clear
         soundItem = sound
+        snapItem = snap
         menu.addItem(toggle)
         menu.addItem(clear)
         menu.addItem(sound)
+        menu.addItem(snap)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         if Updater.isAvailable {
@@ -127,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem?.title = "\(on ? "Turn Pointer Off" : "Turn Pointer On")    \(Preferences.toggleShortcut.display)"
         clearItem?.title = "Clear Drawing    \(Preferences.clearShortcut.display)"
         soundItem?.state = overlay.soundOn ? .on : .off
+        snapItem?.state = Preferences.snapShapes ? .on : .off
         permissionItem?.isHidden = AXIsProcessTrusted()
     }
 
@@ -189,6 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleSound() {
         overlay.soundOn.toggle()
+    }
+
+    @objc private func toggleSnap() {
+        Preferences.snapShapes.toggle()
     }
 
     @objc private func openSettings() {
