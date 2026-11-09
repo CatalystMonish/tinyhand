@@ -13,3 +13,46 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build (universal)
         run: swift build -c release --arch arm64 --arch x86_64
+      - name: Shape recognizer tests
+        run: ./scripts/test-shapes.sh
+
+  windows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64 zip
+      - name: Build TinyHand.exe and the shape tests
+        run: make -C windows -j4 dist test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TinyHand-windows
+          path: |
+            windows/build/TinyHand.exe
+            windows/build/shape_test.exe
+            windows/dist/*.zip
+
+  windows-check:
+    needs: windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TinyHand-windows
+          path: windows
+      - name: Shape recognizer tests
+        run: windows/build/shape_test.exe
+      - name: Render every shape and pointer
+        shell: pwsh
+        run: |
+          $p = Start-Process windows/build/TinyHand.exe -ArgumentList '--render-test', "$env:RUNNER_TEMP\render.png" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\TinyHand\TinyHand.log"; exit $p.ExitCode }
+      - name: Click through Settings
+        shell: pwsh
+        run: |
+          $p = Start-Process windows/build/TinyHand.exe -ArgumentList '--settings-ui-test' -Wait -PassThru
+          Get-Content "$env:LOCALAPPDATA\TinyHand\TinyHand.log" | Select-String 'selftest'
+          exit $p.ExitCode
