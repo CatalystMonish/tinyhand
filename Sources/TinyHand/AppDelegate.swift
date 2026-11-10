@@ -15,6 +15,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var soundItem: NSMenuItem?
     private var toggleHotKey: UInt32?
     private var clearHotKey: UInt32?
+    private lazy var automation = Automation(overlay: overlay)
+    private var launched = false
+    private var pendingURLs: [URL] = []
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard launched else {
+            pendingURLs += urls
+            return
+        }
+        urls.forEach(automation.handle)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = editingMenu()
@@ -23,9 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         CursorHider.enableBackgroundHiding()
         overlay.onActiveChanged = { [weak self] in
             self?.updateIcon()
+            self?.automation.writeState()
         }
         overlay.onSoundChanged = { [weak self] in
             self?.refreshMenu()
+            self?.automation.writeState()
         }
         overlay.extraPassThrough = { [weak self] in
             guard let frame = self?.statusItem.button?.window?.frame else {
@@ -48,10 +61,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !UserDefaults.standard.bool(forKey: WelcomeWindow.shownKey) || !AXIsProcessTrusted() {
             welcome.show()
         }
+
+        automation.writeState()
+        launched = true
+        pendingURLs.forEach(automation.handle)
+        pendingURLs = []
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         overlay.deactivate()
+        try? FileManager.default.removeItem(at: Automation.stateURL)
     }
 
     private func setupStatusItem() {

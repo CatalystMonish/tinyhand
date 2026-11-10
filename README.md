@@ -33,6 +33,30 @@ Open `TinyHand.dmg`, drag TinyHand to Applications and allow **Accessibility** w
 While the pointer is on, a small toolbar at the bottom of the screen lets you pick one of
 36 hands or a laser dot, mute the tap sound, or exit.
 
+## Automation
+
+Launchers like Raycast or Alfred, and shell scripts, can control TinyHand with
+`tinyhand://` links. Use `open -g` so TinyHand doesn't take focus:
+
+```sh
+open -g tinyhand://toggle
+```
+
+| Link | Action |
+|---|---|
+| `tinyhand://on`, `tinyhand://off`, `tinyhand://toggle` | Turn the pointer on, off, or flip it |
+| `tinyhand://clear` | Clear the drawing |
+| `tinyhand://style/<id>` | Switch to a hand (or `laser`) and turn the pointer on |
+| `tinyhand://sound/on`, `/off`, `/toggle` | Tap sound for the current pointer |
+
+While TinyHand runs, it keeps its current state in
+`~/Library/Application Support/TinyHand/state.json`: whether the pointer is on, the
+selected style, whether sound is on, and every style with its `id`, name and type
+(`hand`, `custom` or `laser`). The file is removed when TinyHand quits. It also
+records the app's `pid`, so a file left behind by a crash can be detected.
+
+If TinyHand isn't running, opening any link launches it and then runs the command.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
