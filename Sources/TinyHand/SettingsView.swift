@@ -447,6 +447,12 @@ private struct GeneralPage: View {
                         .focusable(false)
                     }
                 }
+                Row("Double-tap ⇧ to click through", detail: "Clicks reach the app and the hand stays. Double-tap again for taps. The menu bar icon turns orange.") {
+                    Toggle("", isOn: model.binding({ Preferences.doubleShiftClickThrough }, { Preferences.doubleShiftClickThrough = $0 }))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .focusable(false)
+                }
             }
             Card(title: "Startup") {
                 Row("Open TinyHand when you log in") {

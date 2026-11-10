@@ -43,6 +43,14 @@ final class OverlayController {
 
     private(set) var isActive = false
     private var activity: NSObjectProtocol?
+    private var shiftMonitors: [Any] = []
+    private var shiftDownAt: Date?
+    private var shiftDownInputs: UInt32 = 0
+    private var lastShiftTap = Date.distantPast
+    private var lastShiftTapInputs: UInt32 = 0
+
+    private static let shiftTapMax: TimeInterval = 0.3
+    private static let shiftDoubleMax: TimeInterval = 0.35
     var onActiveChanged: (() -> Void)?
     var onNeedsPermission: (() -> Void)?
 
@@ -129,6 +137,9 @@ final class OverlayController {
         NotificationCenter.default.addObserver(forName: Preferences.changed, object: nil, queue: .main) { [weak self] _ in
             self?.syncSound()
             self?.inputTap.interactKey = Preferences.interactKey.cgFlags
+            if let self = self, !Preferences.doubleShiftClickThrough, self.isClickThrough {
+                self.setClickThrough(false)
+            }
             self?.armView.updateInkColor()
             self?.tapSound.load(Preferences.tapSound)
             if let self = self, self.armView.style != PointerStyle.saved {
@@ -217,6 +228,93 @@ final class OverlayController {
         currentFrame = nil
         tick()
         Log.write("re-showed overlay, now on active space=\(window.isOnActiveSpace)")
+    }
+
+    var isClickThrough: Bool {
+        isActive && inputTap.clickThrough
+    }
+
+    private func installShiftMonitors() {
+        guard shiftMonitors.isEmpty else {
+            return
+        }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
+            self?.shiftChanged(event.modifierFlags)
+        }) {
+            shiftMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
+            self?.shiftChanged(event.modifierFlags)
+            return event
+        }) {
+            shiftMonitors.append(local)
+        }
+    }
+
+    private func removeShiftMonitors() {
+        shiftMonitors.forEach(NSEvent.removeMonitor)
+        shiftMonitors = []
+        shiftDownAt = nil
+        lastShiftTap = .distantPast
+    }
+
+    // Keys and clicks pressed since boot. Comparing it across a Shift tap tells a clean tap
+    // from typing a capital letter, without reading which keys were pressed.
+    private static func inputCount() -> UInt32 {
+        let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        return types.reduce(0) { $0 &+ CGEventSource.counterForEventType(.hidSystemState, eventType: $1) }
+    }
+
+    private func shiftChanged(_ flags: NSEvent.ModifierFlags) {
+        guard Preferences.doubleShiftClickThrough else {
+            return
+        }
+        let held = flags.intersection([.shift, .control, .option, .command])
+        if held == .shift {
+            shiftDownAt = Date()
+            shiftDownInputs = OverlayController.inputCount()
+            return
+        }
+        guard held.isEmpty, let down = shiftDownAt else {
+            shiftDownAt = nil
+            lastShiftTap = .distantPast
+            return
+        }
+        shiftDownAt = nil
+        let inputs = OverlayController.inputCount()
+        let now = Date()
+        guard now.timeIntervalSince(down) < OverlayController.shiftTapMax, inputs == shiftDownInputs else {
+            lastShiftTap = .distantPast
+            return
+        }
+        let isDouble = down.timeIntervalSince(lastShiftTap) < OverlayController.shiftDoubleMax
+            && shiftDownInputs == lastShiftTapInputs
+        if isDouble {
+            lastShiftTap = .distantPast
+            setClickThrough(!inputTap.clickThrough)
+            return
+        }
+        lastShiftTap = now
+        lastShiftTapInputs = inputs
+    }
+
+    private func setClickThrough(_ on: Bool) {
+        guard isActive else {
+            return
+        }
+        inputTap.clickThrough = on
+        Log.write(on ? "click-through on" : "click-through off")
+        if on {
+            release()
+        }
+        toolbar.showHint(on
+            ? [("Clicks go through", "the hand stays"), ("Double-tap ⇧", "to tap again")]
+            : [("Taps", "clicks don't reach apps"), ("Double-tap ⇧", "to click through")])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.toolbar.hideHint()
+        }
+        wake()
+        onActiveChanged?()
     }
 
     private func turnOffForSystem(_ reason: String) {
@@ -317,6 +415,8 @@ final class OverlayController {
             options: [.userInitiated, .latencyCritical], reason: "TinyHand pointer is on")
         let installed = inputTap.install()
         inputTap.interactKey = Preferences.interactKey.cgFlags
+        inputTap.clickThrough = false
+        installShiftMonitors()
         inputTap.setActive(installed)
         Log.write("activate trusted=\(AXIsProcessTrusted()) tapInstalled=\(installed)")
 
@@ -331,6 +431,9 @@ final class OverlayController {
             var parts: [(key: String, text: String)] = [("Click", "to tap"), ("Drag", "to draw")]
             if Preferences.interactKey != .off {
                 parts.append(("Hold \(Preferences.interactKey.symbol)", "to click for real"))
+            }
+            if Preferences.doubleShiftClickThrough {
+                parts.append(("Double-tap ⇧", "to click through"))
             }
             parts.append(("Esc", "to exit"))
             toolbar.showHint(parts)
@@ -354,7 +457,9 @@ final class OverlayController {
         timer = nil
         timerInterval = 0
         removeIdleMonitors()
+        removeShiftMonitors()
         inputTap.setActive(false)
+        inputTap.clickThrough = false
         if let a = activity {
             ProcessInfo.processInfo.endActivity(a)
             activity = nil
@@ -397,8 +502,9 @@ final class OverlayController {
         let interacting = (!key.isEmpty && CGEventSource.flagsState(.hidSystemState).contains(key)) || inputTap.interactPressing
         interactHeld = interacting
         menuHover = overMenu
-        let normal = !drawing && !Preferences.interactKeepsHand && (interacting || overMenu || ownMenuOpen)
-        setEscEnabled(menuRects.isEmpty && !ownMenuOpen)
+        let through = inputTap.clickThrough
+        let normal = !drawing && !Preferences.interactKeepsHand && ((interacting && !through) || overMenu || ownMenuOpen)
+        setEscEnabled(menuRects.isEmpty && !ownMenuOpen && !through)
 
         if normal != normalCursor {
             let at = "at \(Int(mouse.x)),\(Int(mouse.y))"
@@ -612,7 +718,7 @@ final class OverlayController {
 
         updateZones(mouse: mouse, screen: screen)
         let overDock = DockArea.contains(OverlayController.cgPoint(mouse))
-        let catchMouse = overDock && inputTap.isInstalled && !normalCursor && !interactHeld
+        let catchMouse = overDock && inputTap.isInstalled && !normalCursor && !interactHeld && !inputTap.clickThrough
         if window.ignoresMouseEvents == catchMouse {
             window.ignoresMouseEvents = !catchMouse
         }

@@ -250,6 +250,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         image?.size = NSSize(width: 18, height: 18)
         image?.isTemplate = true
         statusItem.button?.image = image
+        statusItem.button?.contentTintColor = overlay.isClickThrough ? .systemOrange : nil
+        if overlay.isClickThrough {
+            statusItem.button?.toolTip = "TinyHand clicks go through — double-tap ⇧ to tap again, click to turn off"
+            return
+        }
         statusItem.button?.toolTip = overlay.isActive
             ? "TinyHand is on — click to turn off, right-click for the menu"
             : "TinyHand — click to turn on, right-click for the menu"
