@@ -2,16 +2,25 @@ import AppKit
 import AVFoundation
 
 enum TapSoundChoice: String, CaseIterable {
-    case thock, click, pop, wood, boop, squeak
+    case thock, click, tock, clack, typewriter, snap, wood, pop, boop, blip, coin, pew, squeak, quack, chirp
 
     var title: String {
         switch self {
         case .thock: return "Thock"
         case .click: return "Click"
-        case .pop: return "Pop"
         case .wood: return "Wood block"
+        case .pop: return "Pop"
         case .boop: return "Boop"
+        case .tock: return "Tock"
+        case .clack: return "Clack"
+        case .typewriter: return "Typewriter"
+        case .snap: return "Snap"
+        case .blip: return "Blip"
+        case .coin: return "Coin"
+        case .pew: return "Pew"
         case .squeak: return "Squeak"
+        case .quack: return "Quack"
+        case .chirp: return "Chirp"
         }
     }
 }
