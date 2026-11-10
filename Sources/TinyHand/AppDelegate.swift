@@ -250,14 +250,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         image?.size = NSSize(width: 18, height: 18)
         image?.isTemplate = true
         statusItem.button?.image = image
-        statusItem.button?.contentTintColor = overlay.isClickThrough ? .systemOrange : nil
-        if overlay.isClickThrough {
+        if overlay.isClickThrough, let image = image {
+            statusItem.button?.image = AppDelegate.tinted(image, .systemOrange)
             statusItem.button?.toolTip = "TinyHand clicks go through — double-tap ⇧ to tap again, click to turn off"
             return
         }
         statusItem.button?.toolTip = overlay.isActive
             ? "TinyHand is on — click to turn off, right-click for the menu"
             : "TinyHand — click to turn on, right-click for the menu"
+    }
+
+    // Status bar buttons ignore contentTintColor on template images, so bake the colour in.
+    private static func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
+        let tinted = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        tinted.isTemplate = false
+        return tinted
     }
 
     private func editingMenu() -> NSMenu {
