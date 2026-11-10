@@ -198,6 +198,25 @@ final class OverlayController {
                 self?.turnOffForSystem(name.rawValue)
             }
         }
+        workspace.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.followSpace()
+        }
+    }
+
+    private func followSpace() {
+        guard isActive else {
+            return
+        }
+        let onSpace = window.isOnActiveSpace
+        Log.write("space changed, overlay on active space=\(onSpace)")
+        if onSpace {
+            return
+        }
+        window.orderFrontRegardless()
+        toolbar.show()
+        currentFrame = nil
+        tick()
+        Log.write("re-showed overlay, now on active space=\(window.isOnActiveSpace)")
     }
 
     private func turnOffForSystem(_ reason: String) {
