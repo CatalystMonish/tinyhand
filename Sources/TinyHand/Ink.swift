@@ -16,6 +16,14 @@ final class Ink {
     private var fadeDelay: CFTimeInterval { max(0.5, Preferences.fadeSeconds) }
     private let fadeDuration: CFTimeInterval = 0.6
 
+    var arrow = false {
+        didSet {
+            if arrow != oldValue {
+                redraw()
+            }
+        }
+    }
+
     private var stroke: CAShapeLayer?
     private var points: [CGPoint] = []
 
@@ -59,6 +67,7 @@ final class Ink {
         }
         stroke = nil
         points = []
+        arrow = false
         freeze(s)
         if keep {
             return
@@ -106,6 +115,17 @@ final class Ink {
         guard let s = stroke, let first = points.first else {
             return
         }
+        let path = smoothPath(first)
+        if arrow {
+            addHead(to: path, size: max(14, s.lineWidth * 3.2))
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        s.path = path
+        CATransaction.commit()
+    }
+
+    private func smoothPath(_ first: CGPoint) -> CGMutablePath {
         let path = CGMutablePath()
         path.move(to: first)
         if points.count == 1 {
@@ -120,9 +140,26 @@ final class Ink {
         if points.count > 1, let last = points.last {
             path.addLine(to: last)
         }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        s.path = path
-        CATransaction.commit()
+        return path
+    }
+
+    // Aims the head along the last stretch of the stroke, so a wobble at the very end doesn't twist it.
+    private func addHead(to path: CGMutablePath, size: CGFloat) {
+        guard let end = points.last else {
+            return
+        }
+        let back = points.last { hypot(end.x - $0.x, end.y - $0.y) >= size * 1.2 } ?? points.first ?? end
+        let length = hypot(end.x - back.x, end.y - back.y)
+        guard length > 1 else {
+            return
+        }
+        let head = min(size, length * 0.8)
+        let angle = atan2(end.y - back.y, end.x - back.x)
+        let spread = CGFloat.pi / 7
+        for side: CGFloat in [-1, 1] {
+            let a = angle + .pi + side * spread
+            path.move(to: end)
+            path.addLine(to: CGPoint(x: end.x + cos(a) * head, y: end.y + sin(a) * head))
+        }
     }
 }

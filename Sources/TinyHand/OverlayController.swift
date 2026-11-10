@@ -266,6 +266,9 @@ final class OverlayController {
     }
 
     private func shiftChanged(_ flags: NSEvent.ModifierFlags) {
+        if armView.ink.isDrawing {
+            armView.ink.arrow = OverlayController.wantsArrow()
+        }
         guard Preferences.doubleShiftClickThrough else {
             return
         }
@@ -369,7 +372,12 @@ final class OverlayController {
             }
             ink.begin(at: start, width: armView.inkWidth)
         }
+        ink.arrow = OverlayController.wantsArrow()
         ink.extend(to: p)
+    }
+
+    private static func wantsArrow() -> Bool {
+        CGEventSource.flagsState(.hidSystemState).contains(.maskCommand)
     }
 
     private func localMouse() -> CGPoint? {

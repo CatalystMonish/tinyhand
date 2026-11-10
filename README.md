@@ -27,6 +27,7 @@ Open `TinyHand.dmg`, drag TinyHand to Applications and allow **Accessibility** w
 | Right-click the menu bar icon | Menu and Settings |
 | Click | Tap (nothing underneath gets clicked) |
 | Hold and drag | Draw on the screen |
+| Hold **⌘** while drawing | Add an arrowhead to the end of the line |
 | **⌃⌥X** | Clear the drawing |
 | **Esc** | Clear everything and turn the pointer off |
 
