@@ -105,6 +105,10 @@ final class OverlayController {
             }
             self?.noteButtonEvent()
         }
+        inputTap.onScreenLocked = { [weak self] in
+            self?.turnOffForSystem("click on locked screen")
+        }
+        observeLockAndSleep()
 
         toolbar.onPick = { [weak self] style in
             self?.pick(style)
@@ -173,6 +177,34 @@ final class OverlayController {
 
     func exit() {
         clearInk()
+        deactivate()
+    }
+
+    private func observeLockAndSleep() {
+        let distributed = DistributedNotificationCenter.default()
+        for name in ["com.apple.screenIsLocked", "com.apple.screensaver.didstart"] {
+            distributed.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                self?.turnOffForSystem(name)
+            }
+        }
+        let workspace = NSWorkspace.shared.notificationCenter
+        let names: [Notification.Name] = [
+            NSWorkspace.screensDidSleepNotification,
+            NSWorkspace.willSleepNotification,
+            NSWorkspace.sessionDidResignActiveNotification,
+        ]
+        for name in names {
+            workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.turnOffForSystem(name.rawValue)
+            }
+        }
+    }
+
+    private func turnOffForSystem(_ reason: String) {
+        guard isActive else {
+            return
+        }
+        Log.write("turning pointer off: \(reason)")
         deactivate()
     }
 

@@ -7,6 +7,7 @@ final class InputTap {
     var onMouseUp: (() -> Void)?
     var onLeftDragged: (() -> Void)?
     var onPassThroughPress: ((CGPoint) -> Void)?
+    var onScreenLocked: (() -> Void)?
 
     private let lock = NSLock()
     private var _active = false
@@ -177,9 +178,16 @@ final class InputTap {
 
         switch type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            if InputTap.screenLocked {
+                DispatchQueue.main.async { [weak self] in self?.onScreenLocked?() }
+                return Unmanaged.passUnretained(event)
+            }
             DispatchQueue.main.async { [weak self] in self?.onMouseDown?() }
             return nil
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            if InputTap.screenLocked {
+                return Unmanaged.passUnretained(event)
+            }
             DispatchQueue.main.async { [weak self] in self?.onMouseUp?() }
             return nil
         case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
@@ -191,5 +199,13 @@ final class InputTap {
         default:
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    // Backstop for lock paths that don't post com.apple.screenIsLocked.
+    private static var screenLocked: Bool {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
+            return false
+        }
+        return session["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 }
