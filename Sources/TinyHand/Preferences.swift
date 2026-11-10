@@ -144,6 +144,11 @@ enum Preferences {
         set { set(newValue.rawValue, "inkChoice") }
     }
 
+    static var showToolbar: Bool {
+        get { defaults.object(forKey: "showToolbar") as? Bool ?? true }
+        set { set(newValue, "showToolbar") }
+    }
+
     static var showInkButton: Bool {
         get { defaults.object(forKey: "showInkButton") as? Bool ?? true }
         set { set(newValue, "showInkButton") }
@@ -182,7 +187,7 @@ enum Preferences {
     static func resetAll() {
         for key in ["shortcut.toggle", "shortcut.clear", "pointerSize", "showShadow", "fadeSeconds",
                     "sound.hands", "sound.laser", "interactKey", "interactKeepsHand", "doubleShiftClickThrough", "pinnedStyles", "pointerStyle",
-                    "inkChoice", "showInkButton", "tapSound"] {
+                    "inkChoice", "showInkButton", "showToolbar", "tapSound"] {
             defaults.removeObject(forKey: key)
         }
         NotificationCenter.default.post(name: changed, object: nil)

@@ -582,6 +582,7 @@ private struct PointersPage: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.primary.opacity(0.045))
                 )
+                .opacity(Preferences.showToolbar ? 1 : 0.45)
                 .background(GeometryReader { g in
                     Color.clear
                         .onAppear { rowFrame = g.frame(in: .named("pointersPage")) }
@@ -601,6 +602,18 @@ private struct PointersPage: View {
                     .padding(.horizontal, 4)
                 if let message = model.pinMessage {
                     Text(message).font(.system(size: 12)).foregroundColor(.red).padding(.horizontal, 4)
+                }
+            }
+            Card(title: "Toolbar") {
+                Row("Show the toolbar", detail: Preferences.showToolbar
+                    ? "Pops up when the pointer turns on and near the bottom of the screen."
+                    : "Stays hidden. Press Esc to exit, or use the menu bar.") {
+                    Toggle("", isOn: model.binding({ Preferences.showToolbar }, { Preferences.showToolbar = $0 }))
+                        .toggleStyle(.switch).labelsHidden().focusable(false)
+                }
+                Row("Ink button", detail: "Change the colour while you present.") {
+                    Toggle("", isOn: model.binding({ Preferences.showInkButton }, { Preferences.showInkButton = $0 }))
+                        .toggleStyle(.switch).labelsHidden().focusable(false)
                 }
             }
             YourHands(model: model)
@@ -988,10 +1001,6 @@ private struct DrawingPage: View {
                 .pickerStyle(.menu)
                 .fixedSize()
                 .focusable(false)
-            }
-            Row("Ink button in the toolbar", detail: "Change the colour while you present.") {
-                Toggle("", isOn: model.binding({ Preferences.showInkButton }, { Preferences.showInkButton = $0 }))
-                    .toggleStyle(.switch).labelsHidden().focusable(false)
             }
         }
     }
