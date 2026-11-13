@@ -7,12 +7,14 @@ final class InputTap {
     var onMouseUp: (() -> Void)?
     var onLeftDragged: (() -> Void)?
     var onPassThroughPress: ((CGPoint) -> Void)?
+    var onScreenLocked: (() -> Void)?
 
     private let lock = NSLock()
     private var _active = false
     private var _passThroughRects: [CGRect] = []
     private var _interactKey: CGEventFlags = []
     private var _interactPress = false
+    private var _clickThrough = false
 
     var passThroughRects: [CGRect] {
         get { lock.withLock { _passThroughRects } }
@@ -26,6 +28,12 @@ final class InputTap {
     var interactKey: CGEventFlags {
         get { lock.withLock { _interactKey } }
         set { lock.withLock { _interactKey = newValue } }
+    }
+
+    /// Latched by double-tapping Shift: every click reaches the app, as if the interact key were held.
+    var clickThrough: Bool {
+        get { lock.withLock { _clickThrough } }
+        set { lock.withLock { _clickThrough = newValue } }
     }
 
     var interactPressing: Bool {
@@ -142,7 +150,8 @@ final class InputTap {
         let key = interactKey
         switch type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            if !key.isEmpty && (event.flags.contains(key) || CGEventSource.flagsState(.hidSystemState).contains(key)) {
+            let viaKey = !key.isEmpty && (event.flags.contains(key) || CGEventSource.flagsState(.hidSystemState).contains(key))
+            if viaKey || clickThrough {
                 lock.withLock { _interactPress = true }
                 DispatchQueue.main.async { [weak self] in self?.onInteractDown?() }
             }
@@ -177,9 +186,16 @@ final class InputTap {
 
         switch type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            if InputTap.screenLocked {
+                DispatchQueue.main.async { [weak self] in self?.onScreenLocked?() }
+                return Unmanaged.passUnretained(event)
+            }
             DispatchQueue.main.async { [weak self] in self?.onMouseDown?() }
             return nil
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            if InputTap.screenLocked {
+                return Unmanaged.passUnretained(event)
+            }
             DispatchQueue.main.async { [weak self] in self?.onMouseUp?() }
             return nil
         case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
@@ -191,5 +207,13 @@ final class InputTap {
         default:
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    // Backstop for lock paths that don't post com.apple.screenIsLocked.
+    private static var screenLocked: Bool {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
+            return false
+        }
+        return session["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 }

@@ -16,6 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var snapItem: NSMenuItem?
     private var toggleHotKey: UInt32?
     private var clearHotKey: UInt32?
+    private lazy var automation = Automation(overlay: overlay)
+    private var launched = false
+    private var pendingURLs: [URL] = []
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard launched else {
+            pendingURLs += urls
+            return
+        }
+        urls.forEach(automation.handle)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = editingMenu()
@@ -24,9 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         CursorHider.enableBackgroundHiding()
         overlay.onActiveChanged = { [weak self] in
             self?.updateIcon()
+            self?.automation.writeState()
         }
         overlay.onSoundChanged = { [weak self] in
             self?.refreshMenu()
+            self?.automation.writeState()
         }
         overlay.extraPassThrough = { [weak self] in
             guard let frame = self?.statusItem.button?.window?.frame else {
@@ -49,10 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !UserDefaults.standard.bool(forKey: WelcomeWindow.shownKey) || !AXIsProcessTrusted() {
             welcome.show()
         }
+
+        automation.writeState()
+        launched = true
+        pendingURLs.forEach(automation.handle)
+        pendingURLs = []
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         overlay.deactivate()
+        try? FileManager.default.removeItem(at: Automation.stateURL)
     }
 
     private func setupStatusItem() {
@@ -240,9 +259,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         image?.size = NSSize(width: 18, height: 18)
         image?.isTemplate = true
         statusItem.button?.image = image
+        if overlay.isClickThrough, let image = image {
+            statusItem.button?.image = AppDelegate.tinted(image, .systemOrange)
+            statusItem.button?.toolTip = "TinyHand clicks go through — double-tap ⇧ to tap again, click to turn off"
+            return
+        }
         statusItem.button?.toolTip = overlay.isActive
             ? "TinyHand is on — click to turn off, right-click for the menu"
             : "TinyHand — click to turn on, right-click for the menu"
+    }
+
+    // Status bar buttons ignore contentTintColor on template images, so bake the colour in.
+    private static func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
+        let tinted = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        tinted.isTemplate = false
+        return tinted
     }
 
     private func editingMenu() -> NSMenu {

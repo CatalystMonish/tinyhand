@@ -17,6 +17,14 @@ final class Ink {
     private var fadeDelay: CFTimeInterval { max(0.5, Preferences.fadeSeconds) }
     private let fadeDuration: CFTimeInterval = 0.6
 
+    var arrow = false {
+        didSet {
+            if arrow != oldValue {
+                redraw()
+            }
+        }
+    }
+
     private var stroke: CAShapeLayer?
     private var points: [CGPoint] = []
     private var lastLine: (layer: CAShapeLayer, shape: th_shape, at: Date)?
@@ -61,13 +69,15 @@ final class Ink {
             return
         }
         let drawn = points
+        let heldArrow = arrow
         stroke = nil
         points = []
+        arrow = false
         if Preferences.snapShapes {
-            if snapArrowhead(drawn, stroke: s) {
+            if !heldArrow && snapArrowhead(drawn, stroke: s) {
                 return
             }
-            snap(drawn, stroke: s)
+            snap(drawn, stroke: s, arrow: heldArrow)
         } else {
             lastLine = nil
         }
@@ -85,12 +95,22 @@ final class Ink {
         layer.sublayers?.forEach { $0.removeFromSuperlayer() }
     }
 
-    private func snap(_ drawn: [CGPoint], stroke s: CAShapeLayer) {
+    private func snap(_ drawn: [CGPoint], stroke s: CAShapeLayer, arrow: Bool) {
         lastLine = nil
         let input = drawn.map { th_point(x: Float($0.x), y: Float($0.y)) }
         var shape = th_shape()
         let kind = th_recognize(input, Int32(input.count), 0, &shape)
         guard kind != TH_SHAPE_NONE else {
+            return
+        }
+        // A stroke drawn holding Command keeps its arrowhead: a straight one becomes a clean arrow,
+        // anything else stays the curved arrow that was drawn.
+        if arrow {
+            guard kind == TH_SHAPE_LINE else {
+                return
+            }
+            show(shape, in: s, head: max(14, s.lineWidth * 3.2))
+            Log.write("snapped arrow stroke to a straight arrow")
             return
         }
         show(shape, in: s)
@@ -122,7 +142,7 @@ final class Ink {
         return true
     }
 
-    private func show(_ shape: th_shape, in s: CAShapeLayer) {
+    private func show(_ shape: th_shape, in s: CAShapeLayer, head: CGFloat? = nil) {
         var shape = shape
         let path = CGMutablePath()
         for i in 0..<th_shape_path_count(&shape) {
@@ -138,6 +158,9 @@ final class Ink {
             path.addLines(between: pts)
             if th_shape_path_closed(&shape, i) != 0 {
                 path.closeSubpath()
+            }
+            if let size = head, i == 0, let start = pts.first, let end = pts.last {
+                addHead(to: path, from: start, to: end, size: size)
             }
         }
         let crossfade = CATransition()
@@ -191,6 +214,17 @@ final class Ink {
         guard let s = stroke, let first = points.first else {
             return
         }
+        let path = smoothPath(first)
+        if arrow {
+            addHead(to: path, size: max(14, s.lineWidth * 3.2))
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        s.path = path
+        CATransaction.commit()
+    }
+
+    private func smoothPath(_ first: CGPoint) -> CGMutablePath {
         let path = CGMutablePath()
         path.move(to: first)
         if points.count == 1 {
@@ -205,9 +239,30 @@ final class Ink {
         if points.count > 1, let last = points.last {
             path.addLine(to: last)
         }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        s.path = path
-        CATransaction.commit()
+        return path
+    }
+
+    // Aims the head along the last stretch of the stroke, so a wobble at the very end doesn't twist it.
+    private func addHead(to path: CGMutablePath, size: CGFloat) {
+        guard let end = points.last else {
+            return
+        }
+        let back = points.last { hypot(end.x - $0.x, end.y - $0.y) >= size * 1.2 } ?? points.first ?? end
+        addHead(to: path, from: back, to: end, size: size)
+    }
+
+    private func addHead(to path: CGMutablePath, from back: CGPoint, to end: CGPoint, size: CGFloat) {
+        let length = hypot(end.x - back.x, end.y - back.y)
+        guard length > 1 else {
+            return
+        }
+        let head = min(size, length * 0.8)
+        let angle = atan2(end.y - back.y, end.x - back.x)
+        let spread = CGFloat.pi / 7
+        for side: CGFloat in [-1, 1] {
+            let a = angle + .pi + side * spread
+            path.move(to: end)
+            path.addLine(to: CGPoint(x: end.x + cos(a) * head, y: end.y + sin(a) * head))
+        }
     }
 }
